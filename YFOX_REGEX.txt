@@ -1,0 +1,263 @@
+*&---------------------------------------------------------------------*
+*& Report  YFOX_REGEX
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+report yfox_regex.
+
+"-->POOL------------------------------------------------------------------------"
+data: mo_editor_string     type ref to cl_gui_abapedit,
+      mo_editor_resp      type ref to cl_gui_abapedit,
+      mo_container_string  type ref to cl_gui_custom_container,
+      mo_container_resp   type ref to cl_gui_custom_container,
+      mo_wb_editor_string  type ref to cl_wb_editor,
+      mo_wb_editor_resp   type ref to cl_wb_editor,
+      mo_source_string     type ref to cl_wb_source,
+      mo_source_resp      type ref to cl_wb_source,
+      mt_string            type string_table,
+      mt_resp             type string_table,
+      mo_regex            type ref to cl_abap_regex,
+      g_regex_pattern     type char120,
+      g_submatchs,
+      g_debbug.
+
+define regexbreak.
+  if g_debbug = 'X'. break-point. clear g_debbug. endif.
+end-of-definition.
+"-->POOL------------------------------------------------------------------------"
+
+initialization.
+  call screen 0100.
+
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_0100  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+module status_0100 output.
+  set pf-status '0100'.
+  set titlebar '0100'.
+endmodule.                 " STATUS_0100  OUTPUT
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+module user_command_0100 input.
+  case sy-ucomm.
+    when 'BACK' or 'EXIT' or 'CANC'.
+      leave program.
+    when 'ENTE' or 'EXEC'.
+      perform do_regex.
+    when 'HELP'.
+      perform show_help.
+  endcase.
+endmodule.                 " USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*&      Module  START_OBJECTS  OUTPUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+module start_objects output.
+
+  check mo_editor_string is initial.
+
+  create object mo_container_string
+    exporting
+      container_name = 'CC_REGEX'.
+
+  create object mo_editor_string
+    exporting
+      parent = mo_container_string.
+
+  create object mo_wb_editor_string
+    exporting
+      content    = mt_string
+      mode       = 'EDIT'
+      link_dynnr = '0100'.
+
+  mo_wb_editor_string->create_source_object(
+  importing source_object = mo_source_string ).
+
+  append `"As Raposas fazem aniversário em: 21 de Dezembro de 1988, 13 Julho 1888, 15 de Março de 2019`  to mt_string.
+
+  mo_editor_string->set_text( mt_string ).
+  call method cl_gui_cfw=>flush.
+  mo_editor_string->set_toolbar_mode( 1 ).
+  mo_editor_string->set_tabbar_mode( 1 ).
+  mo_editor_string->set_readonly_mode( 0 ).
+  mo_editor_string->set_visible( 'X' ).
+
+  "-->Start Resposta
+
+  create object mo_container_resp
+    exporting
+      container_name = 'CC_RESPOSTA'.
+
+  create object mo_editor_resp
+    exporting
+      parent = mo_container_resp.
+
+  create object mo_wb_editor_resp
+    exporting
+      content    = mt_resp
+      mode       = 'EDIT'
+      link_dynnr = '0100'.
+
+  mo_wb_editor_resp->create_source_object(
+  importing source_object = mo_source_resp ).
+
+
+  append '  _____ ___.                   ___________          ._.'  to mt_resp.
+  append '  /  _  \\_ |__ _____  ______   \_   _____/______  __| |' to mt_resp.
+  append ' /  /_\  \| __ \\__  \ \____ \   |    __)/  _ \  \/  / |' to mt_resp.
+  append '/    |    \ \_\ \/ __ \|  |_> >  |     \(  <_> >    < \|' to mt_resp.
+  append '\____|__  /___  (____  /   __/   \___  / \____/__/\_ \__' to mt_resp.
+  append '        \/    \/     \/|__|          \/             \/\/' to mt_resp.
+
+
+  mo_editor_resp->set_text( mt_resp ).
+  call method cl_gui_cfw=>flush.
+  mo_editor_resp->set_toolbar_mode( 1 ).
+  mo_editor_resp->set_tabbar_mode( 1 ).
+  mo_editor_resp->set_readonly_mode( 1 ).
+  mo_editor_resp->set_visible( 'X' ).
+
+
+
+endmodule.                 " START_OBJECTS  OUTPUT
+*&---------------------------------------------------------------------*
+*&      Form  DO_REGEX
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+form do_regex.
+
+  data:  t_match_result_tab  type  match_result_tab,
+         w_match_result      type  match_result,
+         l_result            type string,
+         l_submatch          type string,
+         l_string            type string,
+         l_bigstring         type string,
+         w_submatches	       type	submatch_result,
+         l_getstring.
+
+  call method mo_editor_string->get_text
+    exporting
+      name                   = 'EDIT'
+    importing
+      table                  = mt_string
+    exceptions
+      error_dp               = 1
+      error_cntl_call_method = 2.
+
+  loop at mt_string into l_string.
+    if l_string is initial.
+      l_getstring = 'X'.
+    endif.
+    if l_getstring = space.
+      concatenate l_bigstring l_string into l_bigstring separated by space.
+    else.
+      if l_string is not initial.
+        if sy-ucomm = 'EXEC'.
+          g_regex_pattern = l_string.
+          condense g_regex_pattern.
+        endif.
+        exit.
+      endif.
+    endif.
+  endloop.
+
+  condense l_bigstring.
+
+  try .
+
+      create object mo_regex
+        exporting
+          pattern      = g_regex_pattern
+          simple_regex = abap_false.
+
+      perform match tables t_match_result_tab[] using l_bigstring mo_regex.
+
+
+    catch cx_sy_invalid_regex.
+      message 'Invalid Regex' type 'S' display like 'E'.
+  endtry.
+
+  refresh mt_resp.
+  loop at t_match_result_tab into w_match_result.
+    try .
+        concatenate l_result l_bigstring+w_match_result-offset(w_match_result-length) into l_result separated by ' | '.
+        if g_submatchs = 'X'.
+          clear l_submatch.
+          loop at w_match_result-submatches into w_submatches.
+            try .
+                if l_submatch is initial.
+                  l_submatch = l_bigstring+w_submatches-offset(w_submatches-length).
+                else.
+                  concatenate l_submatch l_bigstring+w_submatches-offset(w_submatches-length) into l_submatch separated by ';'.
+                endif.
+              catch cx_sy_range_out_of_bounds.
+            endtry.
+          endloop.
+          if l_submatch is not initial.
+            condense l_submatch no-gaps.
+            concatenate '[' l_submatch ']' into l_submatch.
+            concatenate l_result l_submatch into l_result separated by space.
+          endif.
+        endif.
+      catch cx_sy_range_out_of_bounds.
+    endtry.
+  endloop.
+
+  concatenate '"' l_result into l_result separated by space.
+
+  append l_result to mt_resp.
+
+  call method mo_editor_resp->set_text( mt_resp ).
+
+endform.                    " DO_REGEX
+*&---------------------------------------------------------------------*
+*&      Form  MATCH
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_T_MATCH_RESULT_TAB[]  text
+*      -->P_L_BIGSTRING  text
+*      -->P_MO_REGEX  text
+*----------------------------------------------------------------------*
+form match  tables   t_match_result_tab
+            using     l_bigstring
+                      mo_regex.
+
+  find all occurrences of regex mo_regex in l_bigstring
+         results t_match_result_tab[].
+
+  regexbreak.
+
+endform.                    " MATCH
+*&---------------------------------------------------------------------*
+*&      Form  SHOW_HELP
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+form show_help.
+  call function 'DOCU_CALL'
+    exporting
+      id            = 'DE'
+      object        = 'YFOX_REGEXHELP'
+      typ           = 'E'
+      langu         = 'E'
+      displ         = 'X'
+      displ_mode    = '2'
+      use_sec_langu = 'X'.
+endform.                    " SHOW_HELP
